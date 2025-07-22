@@ -87,6 +87,7 @@ def main():
         threshold=config['defense']['tis_threshold']
     )
     clean_indices = tis_filter.filter_clean_samples(train_loader)
+    print(clean_indices)
 
     # 2. 通道过滤
     print("\n2. 执行通道过滤...")

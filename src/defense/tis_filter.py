@@ -10,7 +10,7 @@ class TopologicalInvarianceSifting:
     拓扑不变性筛选 (TIS) - 用于识别清洁样本
     """
 
-    def __init__(self, model: nn.Module, threshold: float = 0.8):
+    def __init__(self, model: nn.Module, threshold: float = 0):
         self.model = model
         self.threshold = threshold
         self.device = next(model.parameters()).device

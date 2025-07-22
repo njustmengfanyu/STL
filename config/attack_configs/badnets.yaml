@@ -1,0 +1,11 @@
+attack:
+  name: "BadNets"
+  type: "badnets"
+  trigger:
+    type: "patch"
+    size: 3
+    position: "bottom_right"
+    color: [255, 255, 255]  # 白色方块
+  poison_ratio: 0.1
+  target_label: 0
+  blend_ratio: 1.0

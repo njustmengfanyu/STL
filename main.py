@@ -1,16 +1,9 @@
 import argparse
+import yaml
+import torch
 from pathlib import Path
 
-import torch
-import torchvision
-import torchvision.transforms as transforms
-import yaml
-
-from src.defense.bootstrap_learner import BootstrapLearner
-from src.defense.channel_filter import ChannelFilter
-from src.defense.tis_filter import TopologicalInvarianceSifting
-from src.models.backbone import create_model
-from src.utils.metrics import evaluate_model
+from experiments.full_pipeline import FullPipelineExperiment
 
 
 def load_config(config_path: str) -> dict:
@@ -19,114 +12,71 @@ def load_config(config_path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def prepare_dataset(config: dict):
-    """准备数据集"""
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
-
-    if config['data']['dataset'] == 'cifar10':
-        train_dataset = torchvision.datasets.CIFAR10(
-            root=config['data']['data_path'],
-            train=True,
-            download=True,
-            transform=transform
-        )
-        test_dataset = torchvision.datasets.CIFAR10(
-            root=config['data']['data_path'],
-            train=False,
-            download=True,
-            transform=transform
-        )
-    else:
-        raise ValueError(f"不支持的数据集: {config['data']['dataset']}")
-
-    return train_dataset, test_dataset
-
-
 def main():
-    parser = argparse.ArgumentParser(description='T-Core Defense Framework')
+    parser = argparse.ArgumentParser(description='T-Core Defense Framework - 完整实验')
     parser.add_argument('--config', type=str, default='config/config.yaml',
-                        help='配置文件路径')
+                        help='主配置文件路径')
+    parser.add_argument('--attack-config', type=str, default='config/attack_configs/badnets.yaml',
+                        help='攻击配置文件路径')
+    parser.add_argument('--dataset', type=str, default='cifar10',
+                        choices=['cifar10', 'cifar100', 'gtsrb'],
+                        help='数据集选择')
+    parser.add_argument('--model', type=str, default='resnet18',
+                        choices=['resnet18', 'resnet50', 'vgg16'],
+                        help='模型选择')
+    parser.add_argument('--attack', type=str, default='badnets',
+                        choices=['badnets', 'blend', 'wanet'],
+                        help='攻击类型')
+    parser.add_argument('--poison-ratio', type=float, default=0.1,
+                        help='中毒比例')
+    parser.add_argument('--gpu', type=str, default='0',
+                        help='GPU设备')
+
     args = parser.parse_args()
+
+    # 设置GPU
+    if torch.cuda.is_available():
+        torch.cuda.set_device(int(args.gpu))
+        device = f"cuda:{args.gpu}"
+    else:
+        device = "cpu"
 
     # 加载配置
     config = load_config(args.config)
 
-    # 设置设备
-    device = torch.device(config['training']['device'] if torch.cuda.is_available() else 'cpu')
-    print(f"使用设备: {device}")
+    # 根据命令行参数更新配置
+    config['data']['dataset'] = args.dataset
+    config['model']['backbone'] = args.model
+    config['attack']['type'] = args.attack
+    config['attack']['poison_ratio'] = args.poison_ratio
+    config['training']['device'] = device
 
-    # 准备数据集
-    train_dataset, test_dataset = prepare_dataset(config)
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=config['training']['batch_size'],
-        shuffle=True,
-        num_workers=4
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        batch_size=config['training']['batch_size'],
-        shuffle=False,
-        num_workers=4
-    )
+    # 更新类别数
+    if args.dataset == 'cifar10':
+        config['model']['num_classes'] = 10
+    elif args.dataset == 'cifar100':
+        config['model']['num_classes'] = 100
+    elif args.dataset == 'gtsrb':
+        config['model']['num_classes'] = 43
 
-    # 创建模型
-    model = create_model(config['model']).to(device)
-    print("模型创建完成")
+    # 加载攻击配置
+    if Path(args.attack_config).exists():
+        attack_config = load_config(args.attack_config)
+        config['attack'].update(attack_config['attack'])
 
-    # T-Core防御流程
-    print("\n=== 开始T-Core防御流程 ===")
+    print("实验配置:")
+    print(f"  数据集: {config['data']['dataset']}")
+    print(f"  模型: {config['model']['backbone']}")
+    print(f"  攻击: {config['attack']['type']}")
+    print(f"  中毒比例: {config['attack']['poison_ratio']:.1%}")
+    print(f"  设备: {config['training']['device']}")
 
-    # 1. 拓扑不变性筛选 (TIS)
-    print("\n1. 执行拓扑不变性筛选...")
-    tis_filter = TopologicalInvarianceSifting(
-        model,
-        threshold=config['defense']['tis_threshold']
-    )
-    clean_indices = tis_filter.filter_clean_samples(train_loader)
-    print(f"清洁样本索引前10个: {clean_indices[:10]}")
+    # 运行实验
+    experiment = FullPipelineExperiment(config)
+    results = experiment.run_full_experiment()
 
-    print(f"找到 {len(clean_indices)} 个清洁样本，占总样本的 {len(clean_indices)/len(train_dataset)*100:.2f}%")
-
-    # 2. 通道过滤
-    print("\n2. 执行通道过滤...")
-    channel_filter = ChannelFilter(
-        model,
-        filter_ratio=config['defense']['channel_filter_ratio']
-    )
-
-    # 创建种子数据加载器
-    seed_dataset = torch.utils.data.Subset(train_dataset, clean_indices)
-    seed_loader = torch.utils.data.DataLoader(
-        seed_dataset,
-        batch_size=min(config['training']['batch_size'], len(clean_indices)),
-        shuffle=True,
-        num_workers=4
-    )
-    channel_filter.apply_channel_filtering(seed_loader)
-
-    # 3. 引导学习
-    print("\n3. 执行引导学习...")
-    bootstrap_learner = BootstrapLearner(model, config)
-    bootstrap_learner.bootstrap_training(
-        seed_loader,
-        train_dataset,
-        num_iterations=config['defense']['bootstrap_iterations']
-    )
-
-    # 4. 最终评估
-    print("\n4. 最终模型评估...")
-    test_accuracy, test_loss = evaluate_model(model, test_loader, device)
-    print(f"测试准确率: {test_accuracy:.2f}%, 测试损失: {test_loss:.6f}")
-
-    # 保存模型
-    model_save_path = Path("checkpoints") / "t_core_model.pth"
-    model_save_path.parent.mkdir(exist_ok=True)
-    torch.save(model.state_dict(), model_save_path)
-    print(f"模型已保存至: {model_save_path}")
+    print("\n实验完成!")
+    return results
 
 
 if __name__ == "__main__":

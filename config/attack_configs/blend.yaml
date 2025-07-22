@@ -1,0 +1,9 @@
+attack:
+  name: "Blend"
+  type: "blend"
+  trigger:
+    type: "blend"
+    pattern_path: "./triggers/hello_kitty.png"
+    alpha: 0.2
+  poison_ratio: 0.1
+  target_label: 0

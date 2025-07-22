@@ -1,22 +1,63 @@
-# T-Core Defense Configuration
+# T-Core Defense Framework Configuration
+experiment:
+  name: "t_core_defense"
+  seed: 42
+  save_results: true
+  save_models: true
+
+# 数据集配置
+data:
+  dataset: "cifar10"
+  data_path: "./data"
+  batch_size: 128
+  num_workers: 4
+  input_size: 32
+
+# 模型配置
 model:
   backbone: "resnet18"
   num_classes: 10
   pretrained: true
+  pretrained_source: "imagenet"
 
-training:
-  batch_size: 128
-  learning_rate: 0.001
-  epochs: 100
-  device: "cuda:0"
-
-defense:
-  tis_threshold: 0.3
-  channel_filter_ratio: 0.7
-  bootstrap_iterations: 5
-  seed_data_ratio: 0.1
-
-data:
-  dataset: "cifar10"
+# 攻击配置
+attack:
+  type: "badnets"  # badnets, blend, wanet
   poison_ratio: 0.1
-  data_path: "./data"
+  target_label: 0
+  trigger_size: 3
+  encoder_poisoning: true  # 是否包含编码器中毒
+
+# 防御配置
+defense:
+  tis:
+    threshold: 0.8
+    similarity_metric: "cosine"
+    consistency_weight: 0.4
+  channel_filter:
+    filter_ratio: 0.7
+    importance_metric: "variance"
+  bootstrap:
+    iterations: 5
+    expansion_ratio: 0.2
+    confidence_threshold: 0.85
+
+# 训练配置
+training:
+  device: "cuda:0"
+  epochs: 100
+  learning_rate: 0.001
+  weight_decay: 1e-4
+  # 迁移学习配置
+  transfer_learning:
+    encoder_lr: 0.0001
+    classifier_lr: 0.001
+    freeze_encoder_epochs: 10
+    fine_tune_epochs: 20
+
+# 评估配置
+evaluation:
+  clean_test: true
+  backdoor_test: true
+  cross_trigger_test: true
+  metrics: ["accuracy", "asr", "defense_success_rate"]

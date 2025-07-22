@@ -1,0 +1,9 @@
+attack:
+  name: "WaNet"
+  type: "wanet"
+  trigger:
+    type: "warping"
+    strength: 0.5
+    grid_size: 4
+  poison_ratio: 0.05
+  target_label: 0

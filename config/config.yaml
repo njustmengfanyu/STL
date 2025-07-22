@@ -1,0 +1,22 @@
+# T-Core Defense Configuration
+model:
+  backbone: "resnet18"
+  num_classes: 10
+  pretrained: true
+
+training:
+  batch_size: 128
+  learning_rate: 0.001
+  epochs: 100
+  device: "cuda:0"
+
+defense:
+  tis_threshold: 0.8
+  channel_filter_ratio: 0.7
+  bootstrap_iterations: 5
+  seed_data_ratio: 0.1
+
+data:
+  dataset: "cifar10"
+  poison_ratio: 0.1
+  data_path: "./data"

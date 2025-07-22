@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Dict, Any
+import src.models.masked_linear as MaskedLinear
 
 
 class ChannelFilter:
@@ -63,7 +64,7 @@ class ChannelFilter:
         importance_scores = self.analyze_channel_importance(clean_dataloader)
 
         for name, module in self.model.named_modules():
-            if name in importance_scores and isinstance(module, MaskedLinear):
+            if name in importance_scores and isinstance(module, MaskedLinear.MaskedLinear):
                 scores = importance_scores[name]
                 # 选择top-k重要通道
                 k = int(len(scores) * self.filter_ratio)

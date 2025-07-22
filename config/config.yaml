@@ -11,7 +11,7 @@ training:
   device: "cuda:0"
 
 defense:
-  tis_threshold: 0.8
+  tis_threshold: 0.3
   channel_filter_ratio: 0.7
   bootstrap_iterations: 5
   seed_data_ratio: 0.1

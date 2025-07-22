@@ -1,15 +1,15 @@
-import torch
-import torch.nn as nn
-import torchvision
-import torchvision.transforms as transforms
-import yaml
 import argparse
 from pathlib import Path
 
-from src.models.backbone import create_model
-from src.defense.tis_filter import TopologicalInvarianceSifting
-from src.defense.channel_filter import ChannelFilter
+import torch
+import torchvision
+import torchvision.transforms as transforms
+import yaml
+
 from src.defense.bootstrap_learner import BootstrapLearner
+from src.defense.channel_filter import ChannelFilter
+from src.defense.tis_filter import TopologicalInvarianceSifting
+from src.models.backbone import create_model
 from src.utils.metrics import evaluate_model
 
 
@@ -87,7 +87,9 @@ def main():
         threshold=config['defense']['tis_threshold']
     )
     clean_indices = tis_filter.filter_clean_samples(train_loader)
-    print(clean_indices)
+    print(f"清洁样本索引前10个: {clean_indices[:10]}")
+
+    print(f"找到 {len(clean_indices)} 个清洁样本，占总样本的 {len(clean_indices)/len(train_dataset)*100:.2f}%")
 
     # 2. 通道过滤
     print("\n2. 执行通道过滤...")
@@ -95,9 +97,12 @@ def main():
         model,
         filter_ratio=config['defense']['channel_filter_ratio']
     )
+
+    # 创建种子数据加载器
+    seed_dataset = torch.utils.data.Subset(train_dataset, clean_indices)
     seed_loader = torch.utils.data.DataLoader(
-        torch.utils.data.Subset(train_dataset, clean_indices),
-        batch_size=config['training']['batch_size'],
+        seed_dataset,
+        batch_size=min(config['training']['batch_size'], len(clean_indices)),
         shuffle=True,
         num_workers=4
     )

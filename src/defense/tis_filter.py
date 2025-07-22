@@ -1,7 +1,8 @@
+from typing import Tuple, List
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-from typing import Tuple, List
 from sklearn.metrics.pairwise import cosine_similarity
 
 
@@ -67,4 +68,15 @@ class TopologicalInvarianceSifting:
         clean_indices = np.where(scores > self.threshold)[0].tolist()
 
         print(f"TIS筛选结果: {len(clean_indices)}/{len(scores)} 样本被识别为清洁样本")
+        print(f"相似性得分统计: 最小值={np.min(scores):.4f}, 最大值={np.max(scores):.4f}, 平均值={np.mean(scores):.4f}")
+
+        # 如果没有样本满足阈值，使用自适应策略
+        if len(clean_indices) == 0:
+            print(f"警告：没有样本满足阈值 {self.threshold}，使用自适应策略")
+            # 选择得分最高的前20%样本作为清洁样本
+            top_k = max(1, int(0.2 * len(scores)))
+            top_indices = np.argsort(scores)[-top_k:]
+            clean_indices = top_indices.tolist()
+            print(f"自适应策略: 选择得分最高的 {len(clean_indices)} 个样本作为清洁样本")
+
         return clean_indices
